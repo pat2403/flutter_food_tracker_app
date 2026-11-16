@@ -1,7 +1,10 @@
 // ignore_for_file: prefer_final_fields, unused_field
-
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter_food_tracker_app/models/food.dart';
+import 'package:flutter_food_tracker_app/services/supabase_service.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 class AddFoodTrackerUI extends StatefulWidget {
   const AddFoodTrackerUI({super.key});
@@ -11,13 +14,52 @@ class AddFoodTrackerUI extends StatefulWidget {
 }
 
 class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
+  // ------ โค้ดคำสั่งที่เกี่ยวกับการเปิดกล้อง หรือแกลลอรี่ -------
+  Uint8List? imageBytes; // เอาไว้เก็บรูปที่จะแสดงที่ UI บนหน้าจอ
+  XFile? imageFile; // เอาไว้เก็บรูปที่จะเป็นไฟล์
+
+  Future<void> openGalleryAndTakePhoto() async {
+    // เปิดกล้องเพื่อถ่ายรูป
+    imageFile = await ImagePicker()
+        .pickImage(source: ImageSource.camera, imageQuality: 80);
+
+    // แปลงรูปที่ถ่ายเป็น Byte เพื่อแสดงที่ UI บนหน้าจอ แต่ต้องตรวจสอบก่อนว่าเขาได้ถ่ายไหม
+    if (imageFile != null) {
+      final bytes = await imageFile!.readAsBytes();
+      setState(() {
+        imageBytes = bytes;
+      });
+    }
+  }
+
+  // เมธอดเปิด gallery เพื่อเลือกรูปภาพ
+  Future<void> openGalleryAndSelectPhoto() async {
+    // เปิด gallery เพื่อเลือกรูปภาพ
+    imageFile = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 80);
+
+    // แปลงรูปที่ถ่ายเป็น Byte เพื่อแสดงที่ UI บนหน้าจอ แต่ต้องตรวจสอบก่อนว่าเขาได้เลือกรูปไหม
+    if (imageFile != null) {
+      final bytes = await imageFile!.readAsBytes();
+      setState(() {
+        imageBytes = bytes;
+      });
+    }
+  }
+
+  // สร้างตัวควบคุม TextField
+  TextEditingController foodNameCtrl = TextEditingController();
+  TextEditingController foodPriceCtrl = TextEditingController();
+  TextEditingController foodPersonCtrl = TextEditingController();
+  TextEditingController _dateController = TextEditingController();
+
+  // ตัวแปรเก็บที่อยู๋รูปกรณีมีการอัปโหลดไฟล์
+  String imageUrlFromUpload = '';
+
   // ตัวแปรเก็บมื้อที่เลือก
   String selectedMeal = 'เช้า'; // ค่าเริ่มต้นเป็น 'เช้า'
 
   List<String> meals = ['เช้า', 'กลางวัน', 'เย็น', 'ว่าง']; // รายการมื้ออาหาร
-
-  // ประกาศตัวแปรสำหรับ TextEditingController เพื่อจัดการกับ TextField
-  TextEditingController _dateController = TextEditingController();
 
   Future<void> _selectDate(BuildContext context) async {
     DateTime? pickedDate = await showDatePicker(
@@ -75,11 +117,32 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.07,
                 ),
-                FaIcon(
-                  FontAwesomeIcons.cameraRetro,
-                  size: MediaQuery.of(context).size.width * 0.3,
-                  color: Colors.grey[400],
-                ),
+                // จะใช้ Ternary Operator _______ ? _______ : _______
+                imageBytes == null
+                    ? InkWell(
+                        onTap: () {
+                          // เปิดกล้องเพื่อถ่ายรูป หรือ เปิด gallery เพื่อเลือกรูปภาพ
+                          openGalleryAndTakePhoto();
+                        },
+                        child: FaIcon(
+                          FontAwesomeIcons.cameraRetro,
+                          size: MediaQuery.of(context).size.width * 0.35,
+                          color: Colors.grey[400],
+                        ),
+                      )
+                    : InkWell(
+                        // หรือใช่ GestureDetector ก็ได้
+                        onTap: () {
+                          // เปิดกล้องเพื่อถ่ายรูป หรือ เปิด gallery เพื่อเลือกรูปภาพ
+                          openGalleryAndTakePhoto();
+                        },
+                        child: Image.memory(
+                          imageBytes!,
+                          width: MediaQuery.of(context).size.width * 0.35,
+                          height: MediaQuery.of(context).size.width * 0.35,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.07,
                 ),
@@ -93,6 +156,7 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodNameCtrl,
                   decoration: InputDecoration(
                     hintText: 'เช่น KFC, Pizza',
                     border: OutlineInputBorder(
@@ -168,6 +232,7 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodPriceCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     hintText: 'เช่น 299.50',
@@ -189,6 +254,7 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodPersonCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     hintText: 'เช่น 3',
@@ -232,7 +298,55 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                 ),
                 // ส่วนปุ่มบันทึก
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    // ควรจะต้อง Validate ก่อนว่าป้อนครบหรือยัง (รูปไม่ถ่ายหรือเลือกก็ได้)'
+                    if (foodNameCtrl.text.isEmpty ||
+                        foodPriceCtrl.text.isEmpty ||
+                        foodPersonCtrl.text.isEmpty ||
+                        _dateController.text.isEmpty) {
+                      // แสดง SnakBar แจ้งเตือน
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('กรุณากรอกข้อมูลให้ครบ'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                      return;
+                    }
+                    // Upload File ไปยัง Storage และบันทึกข้อมูลไปยัง DB
+                    // เริ่มจาก Upload File โดยต้องตรวจสอบก่อนว่าผู้ใช้ได้เลือกรูปหรือไม่
+                    if (imageFile != null) {
+                      // หรือตรวจสอบจาก imageBytes ก็ได้
+                      // หากไม่เท่ากับ null แปลว่ามีการ upload
+                      imageUrlFromUpload =
+                          await SupabaseService().uploadFile(imageFile!);
+                    }
+
+                    // เพิ่มข้อมูลลงใน table ใน DB
+                    // แพ็คข้อมูล
+                    Food food = Food(
+                      foodName: foodNameCtrl.text,
+                      foodMeal: selectedMeal,
+                      foodPrice: double.parse(foodPriceCtrl.text),
+                      foodPerson: int.parse(foodPersonCtrl.text),
+                      foodDate: _dateController.text,
+                      foodImageUrl: imageUrlFromUpload,
+                    );
+                    await SupabaseService().insertFood(food);
+
+                    // แสดง SnakBar แจ้งเตือนบันทึกข้อมูลเรียบร้อยแล้ว
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('บันทึกข้อมูลเรียบร้อย'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+
+                    // ย้อนกลับไปยังหน้าก่อน
+                    Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     minimumSize: Size(
@@ -256,7 +370,17 @@ class _AddFoodTrackerUIState extends State<AddFoodTrackerUI> {
                 ),
                 // ส่วนปุ่มยกเลิก
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    // ล้างข้อมูลใน Textfield และล้างรูป
+                    setState(() {
+                      foodNameCtrl.clear();
+                      foodPriceCtrl.clear();
+                      foodPersonCtrl.clear();
+                      _dateController.clear();
+                      imageFile = null;
+                      imageBytes = null;
+                    });
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     minimumSize: Size(
