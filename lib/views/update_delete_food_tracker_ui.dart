@@ -1,10 +1,19 @@
 // ignore_for_file: prefer_final_fields
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_food_tracker_app/models/food.dart';
+import 'package:flutter_food_tracker_app/services/supabase_service.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 class UpdateDeleteFoodTrackerUI extends StatefulWidget {
-  const UpdateDeleteFoodTrackerUI({super.key});
+  // สร้างตัวแปรมารับข้อมูลที่ส่งมา เพื่อเอาไปใช้กับคลาสด้านล่าง
+  Food? foodUDShow;
+
+  // เอาตัวแปรที่สร้างมารับข้อมูล
+  UpdateDeleteFoodTrackerUI({super.key, this.foodUDShow});
 
   @override
   State<UpdateDeleteFoodTrackerUI> createState() =>
@@ -12,6 +21,39 @@ class UpdateDeleteFoodTrackerUI extends StatefulWidget {
 }
 
 class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
+  // ------ โค้ดคำสั่งที่เกี่ยวกับการเปิดกล้อง หรือแกลลอรี่ -------
+  Uint8List? imageBytes; // เอาไว้เก็บรูปที่จะแสดงที่ UI บนหน้าจอ
+  XFile? imageFile; // เอาไว้เก็บรูปที่จะเป็นไฟล์
+
+  Future<void> openGalleryAndTakePhoto() async {
+    // เปิดกล้องเพื่อถ่ายรูป
+    imageFile = await ImagePicker()
+        .pickImage(source: ImageSource.camera, imageQuality: 80);
+
+    // แปลงรูปที่ถ่ายเป็น Byte เพื่อแสดงที่ UI บนหน้าจอ แต่ต้องตรวจสอบก่อนว่าเขาได้ถ่ายไหม
+    if (imageFile != null) {
+      final bytes = await imageFile!.readAsBytes();
+      setState(() {
+        imageBytes = bytes;
+      });
+    }
+  }
+
+  // เมธอดเปิด gallery เพื่อเลือกรูปภาพ
+  Future<void> openGalleryAndSelectPhoto() async {
+    // เปิด gallery เพื่อเลือกรูปภาพ
+    imageFile = await ImagePicker()
+        .pickImage(source: ImageSource.gallery, imageQuality: 80);
+
+    // แปลงรูปที่ถ่ายเป็น Byte เพื่อแสดงที่ UI บนหน้าจอ แต่ต้องตรวจสอบก่อนว่าเขาได้เลือกรูปไหม
+    if (imageFile != null) {
+      final bytes = await imageFile!.readAsBytes();
+      setState(() {
+        imageBytes = bytes;
+      });
+    }
+  }
+
   // ตัวแปรเก็บมื้อที่เลือก
   String selectedMeal = 'เช้า'; // ค่าเริ่มต้นเป็น 'เช้า'
 
@@ -19,6 +61,12 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
 
   // ประกาศตัวแปรสำหรับ TextEditingController เพื่อจัดการกับ TextField
   TextEditingController _dateController = TextEditingController();
+  TextEditingController foodNameCtrl = TextEditingController();
+  TextEditingController foodPriceCtrl = TextEditingController();
+  TextEditingController foodPersonCtrl = TextEditingController();
+
+  // ตัวแปรเก็บที่อยู๋รูปกรณีมีการอัปโหลดไฟล์
+  String imageUrlFromUpload = '';
 
   Future<void> _selectDate(BuildContext context) async {
     DateTime? pickedDate = await showDatePicker(
@@ -35,6 +83,18 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
             "${pickedDate.year}/${pickedDate.month}/${pickedDate.day}";
       });
     }
+  }
+
+  @override
+  void initState() {
+    // เอาข้อมูลที่ส่งมากำหนดให้กับ widget บนหน้าจอ
+    _dateController.text = widget.foodUDShow!.foodDate.toString();
+    foodNameCtrl.text = widget.foodUDShow!.foodName.toString();
+    foodPriceCtrl.text = widget.foodUDShow!.foodPrice.toString();
+    foodPersonCtrl.text = widget.foodUDShow!.foodPerson.toString();
+    selectedMeal = widget.foodUDShow!.foodMeal.toString();
+    imageUrlFromUpload = widget.foodUDShow!.foodImageUrl ?? '';
+    super.initState();
   }
 
   @override
@@ -76,11 +136,42 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.07,
                 ),
-                FaIcon(
-                  FontAwesomeIcons.cameraRetro,
-                  size: MediaQuery.of(context).size.width * 0.3,
-                  color: Colors.grey[400],
-                ),
+                // ------------------------------------------------------------
+                // ใช้ Ternary Operator แบบต่อเนื่อง
+                imageFile !=
+                        null // ได้ถ่าย-เลือกรูปหรือไม่ ถ้าถ่าย-เลือกก็แสดงรูปที่ถ่าย-เลือก
+                    ? InkWell(
+                        onTap: () {
+                          openGalleryAndTakePhoto();
+                        },
+                        child: Image.memory(
+                          imageBytes!,
+                          width: MediaQuery.of(context).size.width * 0.35,
+                          height: MediaQuery.of(context).size.width * 0.35,
+                        ),
+                      )
+                    : widget.foodUDShow!.foodImageUrl != ""
+                        ? InkWell(
+                            onTap: () {
+                              openGalleryAndTakePhoto();
+                            },
+                            child: Image.network(
+                              widget.foodUDShow!.foodImageUrl.toString(),
+                              width: MediaQuery.of(context).size.width * 0.35,
+                              height: MediaQuery.of(context).size.width * 0.35,
+                            ),
+                          )
+                        : InkWell(
+                            onTap: () {
+                              openGalleryAndTakePhoto();
+                            },
+                            child: Image.asset(
+                              'assets/images/burger.png',
+                              width: MediaQuery.of(context).size.width * 0.35,
+                              height: MediaQuery.of(context).size.width * 0.35,
+                            ),
+                          ),
+                // ------------------------------------------------------------
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.07,
                 ),
@@ -94,6 +185,7 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodNameCtrl,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(5),
@@ -168,6 +260,7 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodPriceCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
@@ -188,6 +281,7 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                   ),
                 ),
                 TextField(
+                  controller: foodPersonCtrl,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
@@ -230,7 +324,53 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                 ),
                 // ส่วนปุ่มบันทึก
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    if (foodNameCtrl.text.isEmpty ||
+                        foodPriceCtrl.text.isEmpty ||
+                        foodPersonCtrl.text.isEmpty ||
+                        _dateController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('กรุณากรอกข้อมูลให้ครบ'),
+                          backgroundColor: Colors.red,
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (imageFile != null) {
+                      // ลบรูปเดิม (ถ้ามี)
+                      final oldImageUrl = widget.foodUDShow!.foodImageUrl ?? '';
+                      if (oldImageUrl.isNotEmpty) {
+                        await SupabaseService().removeFile(oldImageUrl);
+                      }
+                      // อัปโหลดรูปใหม่
+                      imageUrlFromUpload =
+                          await SupabaseService().uploadFile(imageFile!);
+                    }
+
+                    Food food = Food(
+                      foodName: foodNameCtrl.text,
+                      foodMeal: selectedMeal,
+                      foodPrice: double.parse(foodPriceCtrl.text),
+                      foodPerson: int.parse(foodPersonCtrl.text),
+                      foodDate: _dateController.text,
+                      foodImageUrl: imageUrlFromUpload,
+                    );
+
+                    await SupabaseService()
+                        .updateFood(food, widget.foodUDShow!.id!);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('บันทึกแก้ไขข้อมูลเรียบร้อย'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     minimumSize: Size(
@@ -254,7 +394,24 @@ class _UpdateDeleteFoodTrackerUIState extends State<UpdateDeleteFoodTrackerUI> {
                 ),
                 // ส่วนปุ่มยกเลิก
                 ElevatedButton(
-                  onPressed: () {},
+                  onPressed: () async {
+                    // ตรวจสอบก่อนว่าข้อมูลที่ลบมีรูปเดิมไหม ถ้ามีอย่าลืมลบรูปทิ้งด้วย
+                    final imageUrl = widget.foodUDShow!.foodImageUrl ?? '';
+                    if (imageUrl.isNotEmpty) {
+                      await SupabaseService().removeFile(imageUrl);
+                    }
+                    // ลบข้อมูลออกจาก DB
+                    await SupabaseService().deleteFood(widget.foodUDShow!.id!);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('ลบข้อมูลเรียบร้อย'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     minimumSize: Size(

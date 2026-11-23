@@ -3,24 +3,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_food_tracker_app/models/food.dart';
 
 class SupabaseService {
-  // *** สำคัญต้องสร้าง instance/object/ตัวแทนเพื่อที่จะใช้ทำงานกับ Supabase
   final supabase = Supabase.instance.client;
 
-  // ------ ต่อจากนี้ไป ก็จะเป็นเมธอดคำสั่งการทำงานต่างๆ กับ Supabase เช่น เพิ่ม ลบ แก้ไข ดูข้อมูลใน table ใน DB, upload ไฟล์
   // ------ คำสั่ง upload ไฟล์ไปยัง bucket ใน storage
   Future<String> uploadFile(XFile xfile) async {
-    // ก่อนอัปโหลดเปลี่ยนชื่อไฟล์ใหม่ก่อนจะได้ไม่ซ้ำ
-    final newFileName =
-        '${DateTime.now().millisecondsSinceEpoch}_${xfile.name}';
+    final cleanName = xfile.name.replaceAll(' ', '_');
+    final newFileName = '${DateTime.now().millisecondsSinceEpoch}_$cleanName';
 
-    // upload ไฟล์
     await supabase.storage.from('food_tracker_bk').uploadBinary(
           newFileName,
           await xfile.readAsBytes(),
           fileOptions: FileOptions(contentType: xfile.mimeType),
         );
 
-    // หลังจากอัปโหลดเสร็จ ให้ดึงที่อยู่ของไฟล์ที่อัปโหลดไปกลับมาใช้งาน
     return supabase.storage.from('food_tracker_bk').getPublicUrl(newFileName);
   }
 
@@ -30,8 +25,28 @@ class SupabaseService {
   }
 
   // ------ คำสั่ง ดึงข้อมูลจาก table ใน DB
+  Future<List<Food>> getAllFoods() async {
+    final response = await supabase.from('food_tracker_tb').select('*');
+    return response.map((e) => Food.fromJson(e)).toList();
+  }
+
+  // ------ คำสั่งลบไฟล์ออกจาก bucket ใน storage
+  Future<void> removeFile(String imageUrl) async {
+    if (imageUrl.isEmpty) return;
+
+    final rawFileName = imageUrl.split('/').last.split('?').first;
+    final fileName = Uri.decodeComponent(rawFileName);
+
+    await supabase.storage.from('food_tracker_bk').remove([fileName]);
+  }
 
   // ------ คำสั่ง บันทึกแก้ไขข้อมูลลงใน table ใน DB
+  Future<void> updateFood(Food food, String id) async {
+    await supabase.from('food_tracker_tb').update(food.toJson()).eq('id', id);
+  }
 
   // ------ คำสั่ง ลบข้อมูลออกจาก table ใน DB
+  Future<void> deleteFood(String id) async {
+    await supabase.from('food_tracker_tb').delete().eq('id', id);
+  }
 }
